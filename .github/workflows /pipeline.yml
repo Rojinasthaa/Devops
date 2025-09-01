@@ -1,0 +1,41 @@
+name: "Deploy Portfolio"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SERVER_IP: ${{ vars.SERVER_IP }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: "Configure SSH"
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: "Put SSH Key for Server Access"
+        run: |
+          echo $SSH_KEY64 | base64 -d > keys.pem
+          chmod 400 keys.pem
+        env:
+          SSH_KEY64: ${{ secrets.SSH_KEY64 }}
+
+      - name: "Deploy Docker Container on Server"
+        run: |
+          ssh -t ubuntu@$SERVER_IP -i keys.pem '
+            sudo apt update -y &&
+            sudo apt install -y docker.io &&
+            sudo systemctl start docker &&
+            docker stop myportfolio || true &&
+            docker rm myportfolio || true &&
+            docker run --name myportfolio -p 80:80 -d rojina1/mydockerapp
+          '
